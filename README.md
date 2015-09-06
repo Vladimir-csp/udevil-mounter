@@ -12,4 +12,4 @@ udevil-mounter profile.udevil
 
 **application-udevil.xml**: mime package that describes *.udevil profiles
 
-**example.udevil**: example udevil mount profile.
+**example.udevil**: example udevil mount profile, self-explantatory structure inside.
