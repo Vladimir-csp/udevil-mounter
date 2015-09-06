@@ -1,0 +1,4 @@
+[udevil-mounter]
+url=smb://someuser@someserver/share
+options=perm,noforceuid,noforcegid
+mountpoint=/media/share1
