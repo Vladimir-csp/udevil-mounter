@@ -1,0 +1,168 @@
+#!/bin/bash
+
+echo_log(){
+	[ -z "$LOGFILE" ] && LOGFILE="$HOME/.script_logfile.log"
+	echo "$@" | tee -a "$LOGFILE"
+}
+
+echo_error_log(){
+	[ -z "$LOGFILE_ERROR" ] && LOGFILE_ERROR="$HOME/.script_error_logfile.log"
+	echo "$@" | tee -a "$LOGFILE_ERROR" >&2
+}
+
+echo_error(){
+	echo "$@" >&2
+}
+
+echo_debug(){
+	[ -n "$DEBUG" ] && [ "$DEBUG" -ge "1" ] >/dev/null 2>/dev/null && echo "$@"
+}
+
+exit_wait(){
+	EXITCODE=$?
+	[ -n "$1" ] && EXITCODE="$1"
+	read -sn1 -p $"Error occured! Press any key...
+"
+	exit "$EXITCODE"
+}
+
+trim_spaces(){
+	local TRIMVAR=$@
+	TRIMVAR="${TRIMVAR#"${TRIMVAR%%[![:space:]]*}"}"
+	TRIMVAR="${TRIMVAR%"${TRIMVAR##*[![:space:]]}"}"
+	echo -n "$TRIMVAR"
+}
+
+trim_quotes(){
+	local TRIMVAR=$@
+	TRIMVAR="${TRIMVAR#[\'\"]}"
+	TRIMVAR="${TRIMVAR%[\'\"]}"
+	echo -n "$TRIMVAR"
+}
+
+trim_single_quotes(){
+	local TRIMVAR=$@
+	TRIMVAR="${TRIMVAR#[\']}"
+	TRIMVAR="${TRIMVAR%[\']}"
+	echo -n "$TRIMVAR"
+}
+
+trim_double_quotes(){
+	local TRIMVAR=$@
+	TRIMVAR="${TRIMVAR#[\"]}"
+	TRIMVAR="${TRIMVAR%[\"]}"
+	echo -n "$TRIMVAR"
+}
+
+trim_all_quotes(){
+	local TRIMVAR=$@
+	TRIMVAR="${TRIMVAR#"${TRIMVAR%%[!\'\"]*}"}"
+	TRIMVAR="${TRIMVAR%"${TRIMVAR##*[!\'\"]}"}"
+	echo -n "$TRIMVAR"
+}
+
+trim_square_brackets(){
+	local TRIMVAR=$@
+	TRIMVAR="${TRIMVAR#\[}"
+	TRIMVAR="${TRIMVAR%\]}"
+	echo -n "$TRIMVAR"
+}
+
+ini_get(){
+	# depends on trim_*, echo_error functions
+
+	local INIFILE="$1"
+	local SECTION="$2"
+	local KEY="$3"
+	
+	[ ! -r "$INIFILE" ] && { echo_error $"Can not read file" "\"$INIFILE\"" ; return 1 ; }
+	[ -z "$KEY" ] && { echo_error $"No ini key given as argument 3" ; return 1 ; }
+	cat "$INIFILE" | while IFS='' read LINE
+	do
+		# trim spaces around data
+		LINE="$(trim_spaces "$LINE")"
+		
+		# ignore comments
+		[ "${LINE:0:1}" = ";" -o "${LINE:0:1}" = "#" ] && continue
+
+		# get section
+		[ "${LINE:0:1}" = "[" ] && local DATA_SECTION="$(trim_spaces "$(trim_square_brackets "$LINE")")" && continue
+
+		# ignore line without delimiter
+		[ "$LINE" = "${LINE//=/0}" ] && continue
+
+		# get key
+		local DATA_KEY="$(trim_spaces "${LINE%%=*}")"
+
+		# if section an key match, get to the data
+		if [ "$DATA_SECTION" = "$SECTION" ] && [ "$DATA_KEY" = "$KEY" ]
+		then
+			# get value
+			local DATA_VALUE="$(trim_spaces "${LINE#*=}")"
+
+			# handle paired quotes
+			if [ "${DATA_VALUE:0:1}" = "'" -o "${DATA_VALUE:0:1}" = "\"" ] && [ "${DATA_VALUE:0:1}" = "${DATA_VALUE:(-1):1}" ]
+			then
+				# unquote
+				local DATA_VALUE="$(trim_quotes "$DATA_VALUE")"
+			else
+				#shrink whitespaces if value is unquoted
+				local DATA_VALUE="${DATA_VALUE//[[:space:]]/ }"
+				until [ "$DATA_VALUE" = "${DATA_VALUE//  / }" ]
+				do
+					echo_debug "$DATA_VALUE"
+					local DATA_VALUE="${DATA_VALUE//  / }"
+				done
+			fi
+			echo "$DATA_VALUE"
+		fi
+	done
+}
+
+FILE="$1"
+
+[ ! -f "$FILE" ] && { echo_error $"No such file:" "\"$FILE\""; exit_wait 1 ; }
+[ ! -r "$FILE" ] && { echo_error $"Can not read file:" "\"$FILE\"" ; exit_wait 1 ; }
+
+# Parse given profile
+URL="$(ini_get "$FILE" udevil-mounter url)"
+MOUNTPOINT="$(ini_get "$FILE" udevil-mounter mountpoint)"
+OPTIONS="$(ini_get "$FILE" udevil-mounter options)"
+
+[ -z "$URL" ] && { echo_error $"URL is not set," "$(basename "$FILE")" $"is probably invalid." ; exit_wait 1 ; }
+
+# treat relative mountpoint
+if [ -n "$MOUNTPOINT" ] && [ "${MOUNTPOINT:0:1}" != "/" ]
+then
+	MOUNTPOINT="$(ini_get /etc/udevil/udevil.conf '' allowed_media_dirs | cut -d ',' -f 1)/$MOUNTPOINT"
+	MOUNTPOINT="${MOUNTPOINT//'$USER'/$USER}"
+fi
+
+# mount
+if [ -z "$MOUNTPOINT" ] && [ -z "$OPTIONS" ]
+then
+	RESULT="$(udevil mount "$URL" 2>&1)"
+	EXITCODE=$?
+elif [ -z "$MOUNTPOINT" ] && [ -n "$OPTIONS" ]
+then
+	RESULT="$(udevil mount -o "$OPTIONS" "$URL" 2>&1)"
+	EXITCODE=$?
+elif [ -n "$MOUNTPOINT" ] && [ -z "$OPTIONS" ]
+then
+	RESULT="$(udevil mount "$URL" "$MOUNTPOINT" 2>&1)"
+	EXITCODE=$?
+elif [ -n "$MOUNTPOINT" ] && [ -n "$OPTIONS" ]
+then
+	RESULT="$(udevil mount -o "$OPTIONS" "$URL" "$MOUNTPOINT" 2>&1)"
+	EXITCODE=$?
+fi
+
+if [ "$EXITCODE" = "0" ]
+then
+	echo "$RESULT"
+	[ -x "$(which xdg-open)" ] && xdg-open "${RESULT#* at }"
+	[ -x "$(which gvfs-open)" ] && gvfs-open "${RESULT#* at }"
+else
+	echo_error "$RESULT"
+	exit_wait "$EXITCODE"
+fi
