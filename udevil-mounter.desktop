@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Exec=udevil-mounter %f
+Icon=device-disk
+Name=Udevil Mounter
+Name[ru_RU]=Монтирование Udevil
+Comment=Mount devices and shares by *.udevil profiles
+Comment[ru_RU]=Монтирование устройств и ресурсов по профилям *.udevil
+MimeType=application/udevil-mounter
