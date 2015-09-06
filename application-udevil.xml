@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mime-info xmlns='http://www.freedesktop.org/standards/shared-mime-info'>
+<mime-type type='application/udevil-mounter'>
+
+  <comment>Udevil mount profile</comment>
+  <comment xml:lang="ru">Профиль монтирования udevil</comment>
+  <glob pattern="*.udevil"/>
+</mime-type>
+</mime-info>
