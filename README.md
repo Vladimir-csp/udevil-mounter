@@ -2,7 +2,9 @@
 Wrapper that integrates udevil into desktop environment by using simple profile files
 
 ## Usage:
-  udevil-mounter profile.udevil
+```
+udevil-mounter profile.udevil
+```
 
 ## Support files:
 
